@@ -1,0 +1,391 @@
+.trip-detail {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.back-button {
+  background: #f0f0f0;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  transition: background-color 0.2s;
+}
+
+.back-button:hover {
+  background: #e0e0e0;
+}
+
+.trip-header {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.trip-header h1 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 28px;
+}
+
+.travel-suggestions {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f0f8ff;
+  border-left: 4px solid #667eea;
+  border-radius: 8px;
+}
+
+.travel-suggestions h3 {
+  margin: 0 0 20px 0;
+  color: #667eea;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.suggestion-content {
+  background: white;
+  padding: 16px;
+  border-radius: 6px;
+  line-height: 1.8;
+}
+
+.suggestion-content p {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 14px;
+}
+
+.suggestion-heading {
+  font-weight: 700;
+  color: #333;
+  margin-top: 12px !important;
+  margin-bottom: 6px !important;
+  font-size: 14px !important;
+}
+
+.suggestion-bullet {
+  padding-left: 12px;
+  color: #555;
+  font-size: 13px !important;
+}
+
+.suggestion-text {
+  color: #666;
+  font-size: 13px !important;
+}
+
+.suggestion-item {
+  margin-bottom: 15px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.suggestion-item h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.suggestion-item p {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.suggestions-loading {
+  margin-top: 15px;
+  color: #999;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.trip-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.trip-meta p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.trip-meta strong {
+  color: #333;
+}
+
+.itinerary-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.add-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.add-button:hover {
+  background: #764ba2;
+}
+
+.itinerary-form {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.itinerary-form .form-group {
+  margin-bottom: 16px;
+}
+
+.itinerary-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #333;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.itinerary-form input,
+.itinerary-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.itinerary-form input:focus,
+.itinerary-form textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.itinerary-form button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.itinerary-form button:hover {
+  background: #764ba2;
+}
+
+.itinerary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.itinerary-item {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  transition: box-shadow 0.2s;
+}
+
+.itinerary-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.item-content h3 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.item-content p {
+  margin: 6px 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.item-content .time {
+  color: #667eea;
+  font-weight: 500;
+}
+
+.item-content .transport {
+  color: #666;
+}
+
+.item-content .notes {
+  color: #888;
+  font-style: italic;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-button,
+.delete-button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.edit-button:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.delete-button:hover {
+  background: rgba(255, 0, 0, 0.1);
+}
+
+.empty {
+  text-align: center;
+  color: #999;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 40px;
+  font-size: 16px;
+}
+
+.error {
+  color: #c33;
+}
+
+.qa-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-top: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.question-form {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.question-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.question-form textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.question-form button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.question-form button:hover:not(:disabled) {
+  background: #764ba2;
+}
+
+.question-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.comment-item {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.comment-item .question {
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 14px;
+}
+
+.comment-item .answer {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.6;
+  padding-left: 12px;
+}
+
+.comment-item .answer.loading {
+  font-style: italic;
+  color: #999;
+}
