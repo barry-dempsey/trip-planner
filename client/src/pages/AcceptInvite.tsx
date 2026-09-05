@@ -23,17 +23,19 @@ export default function AcceptInvite() {
         return
       }
 
-      // Extract groupId from token if needed, or make a request without auth
-      // For now, we'll extract it from the invite mechanism
+      console.log('Accepting invite with token:', token)
+
       const response = await axios.post(
-        `${apiUrl}/api/groups/unknown/invitations/${token}/accept`
+        `${apiUrl}/api/groups/invitations/${token}/accept`
       )
 
+      console.log('Accept response:', response.data)
       setTripName(response.data.trip?.name)
       setTimeout(() => {
         navigate('/trips')
       }, 2000)
     } catch (err: any) {
+      console.error('Accept error:', err)
       setError(err.response?.data?.error || 'Failed to accept invitation')
       setLoading(false)
     }
