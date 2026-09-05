@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { io, Socket } from 'socket.io-client'
 import './TripDetail.css'
 
 interface ItineraryItem {
@@ -49,9 +50,75 @@ export default function TripDetail() {
   const [comments, setComments] = useState<Comment[]>([])
   const [questionText, setQuestionText] = useState('')
   const [askingQuestion, setAskingQuestion] = useState(false)
+  const [activeUsers, setActiveUsers] = useState<any[]>([])
+  const [socket, setSocket] = useState<Socket | null>(null)
+  const [conflictError, setConflictError] = useState<any>(null)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001'
   const token = localStorage.getItem('authToken')
+
+  useEffect(() => {
+    // Initialize Socket.io connection
+    const socketInstance = io(apiUrl, {
+      auth: { token: token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    })
+
+    socketInstance.on('connect', () => {
+      console.log('Socket connected')
+      if (groupId) {
+        socketInstance.emit('join-trip', { tripId: groupId, userId: token })
+      }
+    })
+
+    socketInstance.on('presence:update', (data) => {
+      setActiveUsers(data.activeUsers || [])
+    })
+
+    socketInstance.on('itinerary:itemAdded', (data) => {
+      setTrip((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          itinerary: [...prev.itinerary, data.item],
+        }
+      })
+    })
+
+    socketInstance.on('itinerary:itemUpdated', (data) => {
+      setTrip((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          itinerary: prev.itinerary.map((item) =>
+            item._id === data.itemId ? data.item : item
+          ),
+        }
+      })
+    })
+
+    socketInstance.on('itinerary:itemDeleted', (data) => {
+      setTrip((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          itinerary: prev.itinerary.filter((item) => item._id !== data.itemId),
+        }
+      })
+    })
+
+    setSocket(socketInstance)
+
+    return () => {
+      if (groupId) {
+        socketInstance.emit('leave-trip', groupId)
+      }
+      socketInstance.disconnect()
+    }
+  }, [groupId, apiUrl, token])
 
   useEffect(() => {
     fetchTrip()
@@ -122,16 +189,35 @@ export default function TripDetail() {
         ? `${apiUrl}/api/trips/${groupId}/itinerary/${editingItemId}`
         : `${apiUrl}/api/trips/${groupId}/itinerary`
 
-      await axios[method](url, itineraryForm, {
+      const payload = editingItemId
+        ? { ...itineraryForm, version: trip?.itinerary.find((i) => i._id === editingItemId)?.version }
+        : itineraryForm
+
+      await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
       setItineraryForm({ stop: '', time: '', transport: '', notes: '' })
       setEditingItemId(null)
       setShowItineraryForm(false)
+      setConflictError(null)
+
+      if (socket) {
+        socket.emit('presence:stopEdit', { tripId: groupId, userId: token })
+      }
+
       fetchTrip()
-    } catch (err) {
-      setError('Failed to save itinerary item')
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        setConflictError({
+          currentVersion: err.response.data.currentVersion,
+          expectedVersion: err.response.data.expectedVersion,
+          itemId: editingItemId,
+        })
+        setError('This item was updated by another user. Reload to see changes.')
+      } else {
+        setError('Failed to save itinerary item')
+      }
       console.error(err)
     }
   }
@@ -157,12 +243,25 @@ export default function TripDetail() {
     })
     setEditingItemId(item._id)
     setShowItineraryForm(true)
+
+    if (socket) {
+      socket.emit('presence:startEdit', {
+        tripId: groupId,
+        userId: token,
+        itemId: item._id,
+      })
+    }
   }
 
   const handleCancelEdit = () => {
     setItineraryForm({ stop: '', time: '', transport: '', notes: '' })
     setEditingItemId(null)
     setShowItineraryForm(false)
+    setConflictError(null)
+
+    if (socket) {
+      socket.emit('presence:stopEdit', { tripId: groupId, userId: token })
+    }
   }
 
   if (loading) return <div className="loading">Loading trip...</div>
@@ -176,7 +275,29 @@ export default function TripDetail() {
       </button>
 
       <div className="trip-header">
-        <h1>{trip.name}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h1>{trip.name}</h1>
+          {activeUsers.length > 0 && (
+            <div className="presence-indicator">
+              <span style={{ fontSize: '12px', color: '#999' }}>Active: </span>
+              {activeUsers.map((user) => (
+                <span key={user.userId} style={{ fontSize: '12px', marginLeft: '8px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: user.status === 'editing' ? '#ff9800' : '#4caf50',
+                      marginRight: '4px',
+                    }}
+                  />
+                  {user.userEmail}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="trip-meta">
           <p>
             <strong>From:</strong> {trip.origin?.address || 'Unknown'}
@@ -237,6 +358,28 @@ export default function TripDetail() {
           <p className="suggestions-loading">✨ Generating AI travel suggestions...</p>
         )}
       </div>
+
+      {conflictError && (
+        <div style={{
+          background: '#fff3cd',
+          border: '1px solid #ffc107',
+          color: '#856404',
+          padding: '12px',
+          borderRadius: '6px',
+          marginBottom: '20px',
+        }}>
+          <strong>⚠️ Conflict Detected:</strong> This item was updated by another user.
+          <button
+            onClick={() => {
+              fetchTrip()
+              setConflictError(null)
+            }}
+            style={{ marginLeft: '12px', cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', color: '#856404' }}
+          >
+            Reload to see changes
+          </button>
+        </div>
+      )}
 
       <div className="itinerary-section">
         <div className="section-header">
@@ -305,10 +448,19 @@ export default function TripDetail() {
           {trip.itinerary.length === 0 ? (
             <p className="empty">No stops yet. Add one to get started!</p>
           ) : (
-            trip.itinerary.map((item) => (
-              <div key={item._id} className="itinerary-item">
-                <div className="item-content">
-                  <h3>{item.stop}</h3>
+            trip.itinerary.map((item) => {
+              const editingUser = activeUsers.find((u) => u.editingItemId === item._id)
+              return (
+                <div key={item._id} className="itinerary-item" style={{
+                  backgroundColor: editingUser ? '#fff9c4' : '#f9f9f9',
+                }}>
+                  <div className="item-content">
+                    {editingUser && (
+                      <div style={{ fontSize: '11px', color: '#ff9800', marginBottom: '4px' }}>
+                        ✏️ {editingUser.userEmail} is editing...
+                      </div>
+                    )}
+                    <h3>{item.stop}</h3>
                   <p className="time">{new Date(item.time).toLocaleString()}</p>
                   {item.transport && <p className="transport">🚗 {item.transport}</p>}
                   {item.notes && <p className="notes">{item.notes}</p>}
@@ -328,7 +480,7 @@ export default function TripDetail() {
                   </button>
                 </div>
               </div>
-            ))
+            )})
           )}
         </div>
       </div>
