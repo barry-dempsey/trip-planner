@@ -45,27 +45,104 @@ if (process.env.REDIS_URL && process.env.REDIS_URL.trim() !== '') {
 }
 
 // Routes
+const tripsRouter = require('./routes/trips');
+tripsRouter.setIO(io);
+
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/trips', authMiddleware, require('./routes/trips'));
+app.use('/api/trips', authMiddleware, tripsRouter);
 app.use('/api/groups', authMiddleware, require('./routes/groups'));
 app.use('/api/comments', authMiddleware, require('./routes/comments'));
 
 // Socket.io connection
+const activePresence = new Map(); // Track active users per trip
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on('join-trip', (tripId) => {
+  socket.on('join-trip', (data) => {
+    const { tripId, userId, userEmail } = data;
     socket.join(`trip:${tripId}`);
-    io.to(`trip:${tripId}`).emit('user-joined', { userId: socket.id, tripId });
+
+    // Track presence
+    const presenceKey = `${tripId}:${userId}`;
+    activePresence.set(presenceKey, {
+      userId,
+      userEmail,
+      socketId: socket.id,
+      status: 'viewing',
+      connectedAt: new Date(),
+    });
+
+    // Get all active users for this trip
+    const tripUsers = Array.from(activePresence.entries())
+      .filter(([key]) => key.startsWith(`${tripId}:`))
+      .map(([, presence]) => presence);
+
+    // Broadcast updated presence
+    io.to(`trip:${tripId}`).emit('presence:update', { activeUsers: tripUsers });
+  });
+
+  socket.on('presence:startEdit', (data) => {
+    const { tripId, userId, itemId } = data;
+    const presenceKey = `${tripId}:${userId}`;
+    const presence = activePresence.get(presenceKey);
+
+    if (presence) {
+      presence.status = 'editing';
+      presence.editingItemId = itemId;
+
+      const tripUsers = Array.from(activePresence.entries())
+        .filter(([key]) => key.startsWith(`${tripId}:`))
+        .map(([, p]) => p);
+
+      io.to(`trip:${tripId}`).emit('presence:update', { activeUsers: tripUsers });
+    }
+  });
+
+  socket.on('presence:stopEdit', (data) => {
+    const { tripId, userId } = data;
+    const presenceKey = `${tripId}:${userId}`;
+    const presence = activePresence.get(presenceKey);
+
+    if (presence) {
+      presence.status = 'viewing';
+      presence.editingItemId = null;
+
+      const tripUsers = Array.from(activePresence.entries())
+        .filter(([key]) => key.startsWith(`${tripId}:`))
+        .map(([, p]) => p);
+
+      io.to(`trip:${tripId}`).emit('presence:update', { activeUsers: tripUsers });
+    }
   });
 
   socket.on('leave-trip', (tripId) => {
     socket.leave(`trip:${tripId}`);
-    io.to(`trip:${tripId}`).emit('user-left', { userId: socket.id, tripId });
+
+    // Remove presence entries for this socket
+    for (const [key, presence] of activePresence.entries()) {
+      if (presence.socketId === socket.id) {
+        activePresence.delete(key);
+      }
+    }
+
+    // Broadcast updated presence
+    const remaining = Array.from(activePresence.entries())
+      .filter(([key]) => key.startsWith(`${tripId}:`))
+      .map(([, p]) => p);
+
+    io.to(`trip:${tripId}`).emit('presence:update', { activeUsers: remaining });
   });
 
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
+
+    // Clean up presence
+    for (const [key, presence] of activePresence.entries()) {
+      if (presence.socketId === socket.id) {
+        activePresence.delete(key);
+      }
+    }
   });
 });
 
