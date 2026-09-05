@@ -5,6 +5,7 @@ import { useAuth } from './hooks/useAuth'
 import Auth from './pages/Auth'
 import TripPlanner from './pages/TripPlanner'
 import TripDetail from './pages/TripDetail'
+import AcceptInvite from './pages/AcceptInvite'
 import './App.css'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,7 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<Auth />} />
+            <Route path="/accept-invite/:token" element={<AcceptInvite />} />
             <Route
               path="/trips"
               element={

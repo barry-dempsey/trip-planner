@@ -53,6 +53,10 @@ export default function TripDetail() {
   const [activeUsers, setActiveUsers] = useState<any[]>([])
   const [socket, setSocket] = useState<Socket | null>(null)
   const [conflictError, setConflictError] = useState<any>(null)
+  const [showMembersTab, setShowMembersTab] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteToken, setInviteToken] = useState<string | null>(null)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001'
   const token = localStorage.getItem('authToken')
@@ -178,6 +182,28 @@ export default function TripDetail() {
       console.error('Failed to ask question:', err)
     } finally {
       setAskingQuestion(false)
+    }
+  }
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inviteEmail.trim() || !trip) return
+
+    setInviting(true)
+    try {
+      const response = await axios.post(
+        `${apiUrl}/api/groups/${groupId}/members`,
+        { email: inviteEmail },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setInviteToken(response.data.invitation?.token)
+      setInviteEmail('')
+      fetchTrip()
+    } catch (err: any) {
+      alert(`Error: ${err.response?.data?.error || 'Failed to send invite'}`)
+      console.error('Failed to invite member:', err)
+    } finally {
+      setInviting(false)
     }
   }
 
@@ -482,6 +508,113 @@ export default function TripDetail() {
               </div>
             )})
           )}
+        </div>
+      </div>
+
+      <div className="qa-section" style={{ marginBottom: '30px' }}>
+        <div className="section-header">
+          <h2>Members</h2>
+          <button
+            className="add-button"
+            onClick={() => setShowMembersTab(!showMembersTab)}
+            style={{ padding: '8px 16px', fontSize: '13px' }}
+          >
+            {showMembersTab ? 'Hide' : '+ Invite'}
+          </button>
+        </div>
+
+        {showMembersTab && (
+          <>
+            <form className="question-form" onSubmit={handleInviteMember}>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="Enter email address..."
+                required
+                style={{ marginBottom: '12px' }}
+              />
+              <button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                {inviting ? '📧 Sending...' : '📧 Send Invite'}
+              </button>
+            </form>
+
+            {inviteToken && (
+              <div
+                style={{
+                  background: '#e8f5e9',
+                  border: '1px solid #4caf50',
+                  color: '#2e7d32',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  marginTop: '16px',
+                }}
+              >
+                <strong>✓ Invitation Created!</strong>
+                <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>
+                  Share this link with the invited person:
+                </p>
+                <div
+                  style={{
+                    background: 'white',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    marginTop: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    wordBreak: 'break-all',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/accept-invite/${inviteToken}`)
+                    alert('Link copied to clipboard!')
+                  }}
+                >
+                  {`${window.location.origin}/accept-invite/${inviteToken}`}
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#558b2f' }}>
+                  (Click to copy link)
+                </p>
+                <button
+                  onClick={() => setInviteToken(null)}
+                  style={{
+                    marginTop: '12px',
+                    background: '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="comments-list" style={{ marginTop: '20px' }}>
+          {trip.members.map((member) => (
+            <div key={member.userId || member.email} className="comment-item">
+              <div className="question">
+                <strong>{member.email || 'Unknown'}</strong>
+                <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999' }}>
+                  {member.role === 'organizer' ? '👑 Organizer' : 'Member'}
+                </span>
+                <span
+                  style={{
+                    marginLeft: '12px',
+                    fontSize: '12px',
+                    color: member.status === 'active' ? '#4caf50' : '#999',
+                  }}
+                >
+                  {member.status === 'pending' ? '⏳ Invited' : '✓ Active'}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

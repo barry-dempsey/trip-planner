@@ -231,6 +231,82 @@ router.get('/:groupId/invitations', async (req, res) => {
   }
 });
 
+// Accept invitation (by token, no groupId needed)
+router.post('/invitations/:token/accept', async (req, res) => {
+  try {
+    const invitation = await TripInvitation.findOne({ token: req.params.token });
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+
+    if (invitation.status !== 'pending') {
+      return res.status(400).json({ error: 'Invitation already processed' });
+    }
+
+    if (new Date() > invitation.expiresAt) {
+      invitation.status = 'expired';
+      await invitation.save();
+      return res.status(400).json({ error: 'Invitation has expired' });
+    }
+
+    const trip = await Trip.findById(invitation.tripId);
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    // Check if user exists, create if not
+    let user = await User.findOne({ email: invitation.recipientEmail });
+    if (!user) {
+      user = new User({
+        uid: `user_${Date.now()}`,
+        email: invitation.recipientEmail,
+        createdAt: new Date(),
+      });
+      await user.save();
+    }
+
+    // Check if user already in trip
+    const alreadyMember = trip.members.some((m) => m.userId === user.uid);
+    if (alreadyMember) {
+      return res.status(400).json({ error: 'Already a member of this trip' });
+    }
+
+    // Add user to trip
+    const pendingMember = trip.members.find((m) => m.email === invitation.recipientEmail);
+    if (pendingMember) {
+      pendingMember.userId = user.uid;
+      pendingMember.status = 'active';
+      pendingMember.inviteAccepted = new Date();
+    } else {
+      trip.members.push({
+        userId: user.uid,
+        email: invitation.recipientEmail,
+        role: 'member',
+        status: 'active',
+        joinedAt: new Date(),
+        invitedBy: invitation.invitedBy,
+        inviteAccepted: new Date(),
+      });
+    }
+
+    trip.updatedAt = new Date();
+    await trip.save();
+
+    // Mark invitation as accepted
+    invitation.status = 'accepted';
+    invitation.acceptedAt = new Date();
+    invitation.acceptedByUserId = user.uid;
+    await invitation.save();
+
+    await logMemberChange(trip._id, trip.groupId, user.uid, user.email, user.uid, 'member_added', {
+      email: invitation.recipientEmail,
+    });
+
+    res.json({ message: 'Invitation accepted', trip, user });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Accept invitation
 router.post('/:groupId/invitations/:token/accept', async (req, res) => {
   try {
