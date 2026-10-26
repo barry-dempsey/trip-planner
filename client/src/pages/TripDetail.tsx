@@ -15,6 +15,7 @@ interface ItineraryItem {
   transport: string
   notes: string
   createdAt: string
+  version?: number
 }
 
 interface Trip {
@@ -392,8 +393,8 @@ export default function TripDetail() {
               <div className="suggestion-content">
                 {trip.travelSuggestions.raw_suggestions
                   .split('\n')
-                  .filter(line => line.trim().length > 0)
-                  .map((line, idx) => {
+                  .filter((line: string) => line.trim().length > 0)
+                  .map((line: string, idx: number) => {
                     const trimmed = line.trim()
                     const isHeader = trimmed.startsWith('####')
                     const isOption = trimmed.match(/^Option\s+[A-Z]:/i)
