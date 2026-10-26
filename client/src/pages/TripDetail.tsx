@@ -3,6 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { io, Socket } from 'socket.io-client'
 import './TripDetail.css'
+import Polls from '../components/Polls'
+import Expenses from '../components/Expenses'
+import LiveLocationMap from '../components/LiveLocationMap'
+import { usePushNotifications } from '../hooks/usePushNotifications'
 
 interface ItineraryItem {
   _id: string
@@ -22,7 +26,7 @@ interface Trip {
   startDate: string
   endDate: string
   itinerary: ItineraryItem[]
-  members: Array<{ userId: string; role: string }>
+  members: Array<{ userId?: string; email?: string; role: string; status?: string }>
   travelSuggestions?: any
 }
 
@@ -56,10 +60,13 @@ export default function TripDetail() {
   const [showMembersTab, setShowMembersTab] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [generatingItinerary, setGeneratingItinerary] = useState(false)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001'
   const token = localStorage.getItem('authToken')
+  const currentUid = JSON.parse(localStorage.getItem('user') || '{}').uid
+  const push = usePushNotifications(apiUrl, token)
 
   useEffect(() => {
     // Initialize Socket.io connection
@@ -85,6 +92,7 @@ export default function TripDetail() {
     socketInstance.on('itinerary:itemAdded', (data) => {
       setTrip((prev) => {
         if (!prev) return prev
+        if (prev.itinerary.some((i) => i._id === data.item._id)) return prev
         return {
           ...prev,
           itinerary: [...prev.itinerary, data.item],
@@ -128,11 +136,11 @@ export default function TripDetail() {
     fetchTrip()
 
     // Poll for suggestions every 2 seconds if not available yet
-    if (!trip?.travelSuggestions) {
+    if (!trip?.travelSuggestions?.raw_suggestions) {
       const interval = setInterval(fetchTrip, 2000)
       return () => clearInterval(interval)
     }
-  }, [groupId, trip?.travelSuggestions])
+  }, [groupId, trip?.travelSuggestions?.raw_suggestions])
 
   useEffect(() => {
     if (trip?._id) {
@@ -182,6 +190,40 @@ export default function TripDetail() {
       console.error('Failed to ask question:', err)
     } finally {
       setAskingQuestion(false)
+    }
+  }
+
+  const handleGenerateItinerary = async () => {
+    const preferences = window.prompt(
+      'Any preferences for the AI? (e.g. budget, food, relaxed pace). Leave blank to skip.',
+      ''
+    )
+    if (preferences === null) return
+    setGeneratingItinerary(true)
+    try {
+      await axios.post(
+        `${apiUrl}/api/trips/${groupId}/itinerary/generate`,
+        { preferences },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      fetchTrip()
+    } catch (err: any) {
+      alert(`Error: ${err.response?.data?.error || 'Failed to generate itinerary'}`)
+    } finally {
+      setGeneratingItinerary(false)
+    }
+  }
+
+  const handleRemoveMember = async (member: { userId?: string; email?: string }) => {
+    if (!confirm(`Remove ${member.email || 'this member'} from the trip?`)) return
+    try {
+      await axios.delete(`${apiUrl}/api/groups/${groupId}/members`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: member.userId ? { userId: member.userId } : { email: member.email },
+      })
+      fetchTrip()
+    } catch (err: any) {
+      alert(`Error: ${err.response?.data?.error || 'Failed to remove member'}`)
     }
   }
 
@@ -301,23 +343,25 @@ export default function TripDetail() {
       </button>
 
       <div className="trip-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div className="trip-title-row">
           <h1>{trip.name}</h1>
+          {(push.status === 'off' || push.status === 'denied') && (
+            <button
+              type="button"
+              disabled={push.status === 'denied'}
+              title={push.status === 'denied' ? 'Notifications are blocked in your browser settings' : ''}
+              onClick={push.enable}
+            >
+              🔔 Enable notifications
+            </button>
+          )}
+          {push.status === 'on' && <span className="push-on">🔔 Notifications on</span>}
           {activeUsers.length > 0 && (
             <div className="presence-indicator">
-              <span style={{ fontSize: '12px', color: '#999' }}>Active: </span>
+              <span>Active:</span>
               {activeUsers.map((user) => (
-                <span key={user.userId} style={{ fontSize: '12px', marginLeft: '8px' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      backgroundColor: user.status === 'editing' ? '#ff9800' : '#4caf50',
-                      marginRight: '4px',
-                    }}
-                  />
+                <span key={user.userId} className="presence-user">
+                  <span className={`presence-dot${user.status === 'editing' ? ' editing' : ''}`} />
                   {user.userEmail}
                 </span>
               ))}
@@ -341,7 +385,7 @@ export default function TripDetail() {
           </p>
         </div>
 
-        {trip.travelSuggestions && (
+        {trip.travelSuggestions?.raw_suggestions && (
           <div className="travel-suggestions">
             <h3>✈️ AI Travel Suggestions</h3>
             {trip.travelSuggestions.raw_suggestions && (
@@ -380,27 +424,24 @@ export default function TripDetail() {
             )}
           </div>
         )}
-        {!trip.travelSuggestions && (
-          <p className="suggestions-loading">✨ Generating AI travel suggestions...</p>
+        {!trip.travelSuggestions?.raw_suggestions && (
+          <p className="suggestions-loading">
+            {trip.travelSuggestions?.error
+              ? `⚠️ Couldn't generate suggestions (${trip.travelSuggestions.error}). Retrying...`
+              : '✨ Generating AI travel suggestions...'}
+          </p>
         )}
       </div>
 
       {conflictError && (
-        <div style={{
-          background: '#fff3cd',
-          border: '1px solid #ffc107',
-          color: '#856404',
-          padding: '12px',
-          borderRadius: '6px',
-          marginBottom: '20px',
-        }}>
+        <div className="conflict-banner">
           <strong>⚠️ Conflict Detected:</strong> This item was updated by another user.
           <button
+            className="btn-link"
             onClick={() => {
               fetchTrip()
               setConflictError(null)
             }}
-            style={{ marginLeft: '12px', cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', color: '#856404' }}
           >
             Reload to see changes
           </button>
@@ -410,6 +451,14 @@ export default function TripDetail() {
       <div className="itinerary-section">
         <div className="section-header">
           <h2>Itinerary</h2>
+          <div className="section-actions">
+          <button
+            className="add-button"
+            onClick={handleGenerateItinerary}
+            disabled={generatingItinerary}
+          >
+            {generatingItinerary ? '✨ Generating...' : '✨ Generate with AI'}
+          </button>
           <button
             className="add-button"
             onClick={() => {
@@ -422,6 +471,7 @@ export default function TripDetail() {
           >
             {showItineraryForm ? 'Cancel' : '+ Add Stop'}
           </button>
+          </div>
         </div>
 
         {showItineraryForm && (
@@ -477,12 +527,10 @@ export default function TripDetail() {
             trip.itinerary.map((item) => {
               const editingUser = activeUsers.find((u) => u.editingItemId === item._id)
               return (
-                <div key={item._id} className="itinerary-item" style={{
-                  backgroundColor: editingUser ? '#fff9c4' : '#f9f9f9',
-                }}>
+                <div key={item._id} className={`itinerary-item${editingUser ? ' editing' : ''}`}>
                   <div className="item-content">
                     {editingUser && (
-                      <div style={{ fontSize: '11px', color: '#ff9800', marginBottom: '4px' }}>
+                      <div className="editing-note">
                         ✏️ {editingUser.userEmail} is editing...
                       </div>
                     )}
@@ -511,13 +559,12 @@ export default function TripDetail() {
         </div>
       </div>
 
-      <div className="qa-section" style={{ marginBottom: '30px' }}>
+      <div className="qa-section">
         <div className="section-header">
           <h2>Members</h2>
           <button
             className="add-button"
             onClick={() => setShowMembersTab(!showMembersTab)}
-            style={{ padding: '8px 16px', fontSize: '13px' }}
           >
             {showMembersTab ? 'Hide' : '+ Invite'}
           </button>
@@ -532,7 +579,6 @@ export default function TripDetail() {
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="Enter email address..."
                 required
-                style={{ marginBottom: '12px' }}
               />
               <button type="submit" disabled={inviting || !inviteEmail.trim()}>
                 {inviting ? '📧 Sending...' : '📧 Send Invite'}
@@ -540,31 +586,11 @@ export default function TripDetail() {
             </form>
 
             {inviteToken && (
-              <div
-                style={{
-                  background: '#e8f5e9',
-                  border: '1px solid #4caf50',
-                  color: '#2e7d32',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  marginTop: '16px',
-                }}
-              >
+              <div className="invite-box">
                 <strong>✓ Invitation Created!</strong>
-                <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>
-                  Share this link with the invited person:
-                </p>
+                <p>Share this link with the invited person:</p>
                 <div
-                  style={{
-                    background: 'white',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    marginTop: '8px',
-                    fontFamily: 'monospace',
-                    fontSize: '12px',
-                    wordBreak: 'break-all',
-                    cursor: 'pointer',
-                  }}
+                  className="invite-link"
                   onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/accept-invite/${inviteToken}`)
                     alert('Link copied to clipboard!')
@@ -572,22 +598,8 @@ export default function TripDetail() {
                 >
                   {`${window.location.origin}/accept-invite/${inviteToken}`}
                 </div>
-                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#558b2f' }}>
-                  (Click to copy link)
-                </p>
-                <button
-                  onClick={() => setInviteToken(null)}
-                  style={{
-                    marginTop: '12px',
-                    background: '#4caf50',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
+                <p className="small">(Click to copy link)</p>
+                <button className="btn-sm" onClick={() => setInviteToken(null)}>
                   Done
                 </button>
               </div>
@@ -595,28 +607,59 @@ export default function TripDetail() {
           </>
         )}
 
-        <div className="comments-list" style={{ marginTop: '20px' }}>
+        <div className="comments-list">
           {trip.members.map((member) => (
             <div key={member.userId || member.email} className="comment-item">
               <div className="question">
                 <strong>{member.email || 'Unknown'}</strong>
-                <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999' }}>
+                <span className="comment-meta">
                   {member.role === 'organizer' ? '👑 Organizer' : 'Member'}
                 </span>
-                <span
-                  style={{
-                    marginLeft: '12px',
-                    fontSize: '12px',
-                    color: member.status === 'active' ? '#4caf50' : '#999',
-                  }}
-                >
+                <span className={`badge ${member.status === 'active' ? 'badge-success' : 'badge-muted'}`}>
                   {member.status === 'pending' ? '⏳ Invited' : '✓ Active'}
                 </span>
+                {member.role !== 'organizer' &&
+                  trip.members.some(
+                    (m) => m.role === 'organizer' && m.userId === currentUid
+                  ) && (
+                    <button
+                      type="button"
+                      className="btn-danger btn-sm"
+                      onClick={() => handleRemoveMember(member)}
+                    >
+                      {member.status === 'pending' ? 'Cancel invite' : 'Remove'}
+                    </button>
+                  )}
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      <LiveLocationMap
+        groupId={trip.groupId}
+        socket={socket}
+        currentUid={currentUid}
+        destination={trip.destination}
+      />
+
+      <Polls
+        groupId={trip.groupId}
+        apiUrl={apiUrl}
+        token={token}
+        currentUid={currentUid}
+        isOrganizer={trip.members.some((m) => m.role === 'organizer' && m.userId === currentUid)}
+        socket={socket}
+      />
+
+      <Expenses
+        groupId={trip.groupId}
+        apiUrl={apiUrl}
+        token={token}
+        currentUid={currentUid}
+        members={trip.members}
+        socket={socket}
+      />
 
       <div className="qa-section">
         <div className="section-header">
@@ -631,7 +674,7 @@ export default function TripDetail() {
             rows={3}
           />
           <button type="submit" disabled={askingQuestion || !questionText.trim()}>
-            {askingQuestion ? '🤔 Thinking...' : '💬 Ask Claude'}
+            {askingQuestion ? '🤔 Thinking...' : '💬 Ask AI'}
           </button>
         </form>
 

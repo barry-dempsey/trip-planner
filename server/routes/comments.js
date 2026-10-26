@@ -1,14 +1,22 @@
 const express = require('express');
 const TripComment = require('../models/TripComment');
 const Trip = require('../models/Trip');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generateText } = require('../services/ai');
+const User = require('../models/User');
+const { notifyTrip } = require('../services/notifications');
 
 const router = express.Router();
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
+const isActiveMember = (trip, uid) =>
+  trip.members.some((m) => m.userId === uid && m.status === 'active');
 
 // Get all comments for a trip
 router.get('/trip/:tripId', async (req, res) => {
   try {
+    const trip = await Trip.findById(req.params.tripId);
+    if (!trip || !isActiveMember(trip, req.user.uid)) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
     const comments = await TripComment.find({ tripId: req.params.tripId }).sort({ createdAt: -1 });
     res.json(comments);
   } catch (error) {
@@ -23,9 +31,9 @@ router.post('/trip/:tripId', async (req, res) => {
     const tripId = req.params.tripId;
     const userId = req.user.uid;
 
-    // Validate trip exists
+    // Validate trip exists and the caller belongs to it
     const trip = await Trip.findById(tripId);
-    if (!trip) {
+    if (!trip || !isActiveMember(trip, userId)) {
       return res.status(404).json({ error: 'Trip not found' });
     }
 
@@ -38,9 +46,14 @@ router.post('/trip/:tripId', async (req, res) => {
 
     await comment.save();
 
-    // Generate answer from Claude
+    const asker = await User.findOne({ uid: userId });
+    notifyTrip(trip, userId, {
+      title: `New question in ${trip.name}`,
+      body: `${asker?.email || 'Someone'} asked: ${String(question).slice(0, 120)}`,
+    });
+
+    // Generate answer with the AI model
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
       const prompt = `The user is planning a trip from ${trip.origin?.address} to ${trip.destination?.address} departing on ${new Date(trip.startDate).toLocaleDateString()}.
 
 Here are the AI travel suggestions:
@@ -50,8 +63,7 @@ User's question: ${question}
 
 Provide a helpful, concise answer about their trip. Keep it to 2-3 sentences.`;
 
-      const result = await model.generateContent(prompt);
-      const answer = result.response.text();
+      const answer = await generateText(prompt);
 
       comment.answer = answer;
       comment.answeredAt = new Date();

@@ -3,6 +3,7 @@ const Trip = require('../models/Trip');
 const TripInvitation = require('../models/TripInvitation');
 const User = require('../models/User');
 const { logMemberChange } = require('../services/activityLogger');
+const { notifyTrip, notifyEmail } = require('../services/notifications');
 
 const router = express.Router();
 
@@ -95,6 +96,12 @@ router.post('/:groupId/members', async (req, res) => {
         'member_invited',
         { email, token }
       );
+
+      notifyEmail(email, {
+        title: `You're invited to ${trip.name}`,
+        body: `${requesterMember.email || 'An organizer'} invited you to join this trip`,
+        url: `/accept-invite/${token}`,
+      });
 
       return res.status(201).json({
         message: 'Invitation sent',
@@ -190,6 +197,59 @@ router.delete('/:groupId/members/:userId', async (req, res) => {
   }
 });
 
+// Remove a member (by userId) or cancel a pending invite (by email)
+router.delete('/:groupId/members', async (req, res) => {
+  try {
+    const { userId, email } = req.body || {};
+    if (!userId && !email) {
+      return res.status(400).json({ error: 'userId or email is required' });
+    }
+
+    const trip = await Trip.findOne({ groupId: req.params.groupId });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    const requesterMember = trip.members.find((m) => m.userId === req.user.uid);
+    if (!requesterMember || requesterMember.role !== 'organizer') {
+      return res.status(403).json({ error: 'Only organizers can remove members' });
+    }
+
+    const index = trip.members.findIndex((m) =>
+      userId ? m.userId === userId : !m.userId && m.email === email
+    );
+    if (index === -1) return res.status(404).json({ error: 'Member not found' });
+
+    const target = trip.members[index];
+    if (target.role === 'organizer') {
+      return res.status(400).json({ error: 'Organizers cannot be removed' });
+    }
+
+    trip.members.splice(index, 1);
+    trip.updatedAt = new Date();
+    await trip.save();
+
+    if (target.email) {
+      await TripInvitation.updateMany(
+        { tripId: trip._id, recipientEmail: target.email, status: 'pending' },
+        { status: 'rejected' }
+      );
+    }
+
+    await logMemberChange(
+      trip._id,
+      trip.groupId,
+      req.user.uid,
+      requesterMember.email,
+      target.userId || target.email,
+      'member_removed',
+      { email: target.email }
+    );
+
+    res.json({ message: 'Member removed', trip });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Get trip members
 router.get('/:groupId/members', async (req, res) => {
   try {
@@ -253,15 +313,11 @@ router.post('/invitations/:token/accept', async (req, res) => {
     const trip = await Trip.findById(invitation.tripId);
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
 
-    // Check if user exists, create if not
-    let user = await User.findOne({ email: invitation.recipientEmail });
-    if (!user) {
-      user = new User({
-        uid: `user_${Date.now()}`,
-        email: invitation.recipientEmail,
-        createdAt: new Date(),
-      });
-      await user.save();
+    // The accepting user must be the logged-in user the invite was sent to
+    const user = await User.findOne({ uid: req.user.uid });
+    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (user.email.toLowerCase() !== invitation.recipientEmail.toLowerCase()) {
+      return res.status(403).json({ error: 'This invitation was sent to a different email address' });
     }
 
     // Check if user already in trip
@@ -301,6 +357,11 @@ router.post('/invitations/:token/accept', async (req, res) => {
       email: invitation.recipientEmail,
     });
 
+    notifyTrip(trip, user.uid, {
+      title: trip.name,
+      body: `${user.email} joined the trip`,
+    });
+
     res.json({ message: 'Invitation accepted', trip, user });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -329,15 +390,11 @@ router.post('/:groupId/invitations/:token/accept', async (req, res) => {
     const trip = await Trip.findById(invitation.tripId);
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
 
-    // Check if user exists, create if not
-    let user = await User.findOne({ email: invitation.recipientEmail });
-    if (!user) {
-      user = new User({
-        uid: `user_${Date.now()}`,
-        email: invitation.recipientEmail,
-        createdAt: new Date(),
-      });
-      await user.save();
+    // The accepting user must be the logged-in user the invite was sent to
+    const user = await User.findOne({ uid: req.user.uid });
+    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (user.email.toLowerCase() !== invitation.recipientEmail.toLowerCase()) {
+      return res.status(403).json({ error: 'This invitation was sent to a different email address' });
     }
 
     // Check if user already in trip
@@ -375,6 +432,11 @@ router.post('/:groupId/invitations/:token/accept', async (req, res) => {
 
     await logMemberChange(trip._id, trip.groupId, user.uid, user.email, user.uid, 'member_added', {
       email: invitation.recipientEmail,
+    });
+
+    notifyTrip(trip, user.uid, {
+      title: trip.name,
+      body: `${user.email} joined the trip`,
     });
 
     res.json({ message: 'Invitation accepted', trip, user });

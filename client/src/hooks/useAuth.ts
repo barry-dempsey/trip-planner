@@ -36,7 +36,9 @@ export function useAuth() {
       setUser(user)
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Signup failed'
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error || err.message
+        : 'Signup failed'
       setError(message)
       return false
     }
@@ -56,7 +58,9 @@ export function useAuth() {
       setUser(user)
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed'
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error || err.message
+        : 'Login failed'
       setError(message)
       return false
     }

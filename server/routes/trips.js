@@ -3,7 +3,9 @@ const { v4: uuidv4 } = require('uuid');
 const Trip = require('../models/Trip');
 const User = require('../models/User');
 const { generateTravelSuggestions } = require('../services/travelSuggestions');
+const { generateItinerary } = require('../services/itineraryBuilder');
 const { logItineraryChange } = require('../services/activityLogger');
+const { notifyTrip } = require('../services/notifications');
 
 const router = express.Router();
 
@@ -36,20 +38,7 @@ router.post('/', async (req, res) => {
     });
 
     await trip.save();
-    const tripId = trip._id;
-
-    // Generate travel suggestions asynchronously (fire and forget)
-    (async () => {
-      try {
-        console.log('Starting async suggestions for trip:', tripId);
-        const suggestions = await generateTravelSuggestions(trip);
-        console.log('Got suggestions, updating database...');
-        const updated = await Trip.findByIdAndUpdate(tripId, { travelSuggestions: suggestions });
-        console.log('Trip updated successfully:', updated ? 'yes' : 'no');
-      } catch (err) {
-        console.error('Error in suggestions pipeline:', err.message);
-      }
-    })();
+    ensureSuggestions(trip);
 
     res.status(201).json(trip);
   } catch (error) {
@@ -68,11 +57,38 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Generate suggestions in the background once a destination exists; retry failures after a cooldown
+const generating = new Set();
+const RETRY_AFTER_MS = 30 * 1000;
+
+function ensureSuggestions(trip) {
+  const existing = trip.travelSuggestions;
+  const hasResult = existing && !existing.error;
+  const recentlyFailed = existing?.error && Date.now() - new Date(existing.failedAt || 0) < RETRY_AFTER_MS;
+  const id = String(trip._id);
+
+  if (hasResult || recentlyFailed || generating.has(id) || !trip.destination?.address) return;
+
+  generating.add(id);
+  (async () => {
+    try {
+      let suggestions = await generateTravelSuggestions(trip);
+      if (suggestions.error) suggestions = { ...suggestions, failedAt: new Date() };
+      await Trip.findByIdAndUpdate(trip._id, { travelSuggestions: suggestions });
+    } catch (err) {
+      console.error('Error in suggestions pipeline:', err.message);
+    } finally {
+      generating.delete(id);
+    }
+  })();
+}
+
 // Get a specific trip
 router.get('/:groupId', async (req, res) => {
   try {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    ensureSuggestions(trip);
     res.json(trip);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -108,6 +124,47 @@ router.delete('/:groupId', async (req, res) => {
     res.json({ message: 'Trip deleted' });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Generate itinerary items with AI and add them to the trip
+router.post('/:groupId/itinerary/generate', async (req, res) => {
+  try {
+    const trip = await Trip.findOne({ groupId: req.params.groupId });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    if (!trip.members.some((m) => m.userId === req.user.uid)) {
+      return res.status(403).json({ error: 'Not a member of this trip' });
+    }
+    if (!trip.destination?.address) {
+      return res.status(400).json({ error: 'Trip needs a destination first' });
+    }
+
+    const items = await generateItinerary(trip, req.body?.preferences);
+    if (items.length === 0) {
+      return res.status(502).json({ error: 'AI did not return any stops. Please try again.' });
+    }
+
+    // Re-read so items added while the AI was working are not overwritten
+    const fresh = await Trip.findOne({ groupId: req.params.groupId });
+    const before = fresh.itinerary.length;
+    items.forEach((item) =>
+      fresh.itinerary.push({ ...item, createdBy: req.user.uid, createdAt: new Date(), version: 1 })
+    );
+    fresh.updatedAt = new Date();
+    await fresh.save();
+
+    const added = fresh.itinerary.slice(before);
+    if (io) {
+      added.forEach((item) =>
+        io.to(`trip:${fresh.groupId}`).emit('itinerary:itemAdded', { item, addedBy: req.user.uid })
+      );
+    }
+
+    res.status(201).json(added);
+  } catch (error) {
+    console.error('Itinerary generation error:', error.message);
+    res.status(500).json({ error: 'Could not generate itinerary: ' + error.message });
   }
 });
 
@@ -156,6 +213,11 @@ router.post('/:groupId/itinerary', async (req, res) => {
         addedBy: req.user.uid,
       });
     }
+
+    notifyTrip(trip, req.user.uid, {
+      title: trip.name,
+      body: `${user?.email || 'Someone'} added a stop: ${stop}`,
+    });
 
     res.status(201).json(addedItem);
   } catch (error) {
@@ -231,6 +293,11 @@ router.put('/:groupId/itinerary/:itemId', async (req, res) => {
       });
     }
 
+    notifyTrip(trip, req.user.uid, {
+      title: trip.name,
+      body: `Stop updated: ${itineraryItem.stop}`,
+    });
+
     res.json(itineraryItem);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -276,6 +343,11 @@ router.delete('/:groupId/itinerary/:itemId', async (req, res) => {
         deletedBy: req.user.uid,
       });
     }
+
+    notifyTrip(trip, req.user.uid, {
+      title: trip.name,
+      body: `Stop removed: ${deletedItem.stop}`,
+    });
 
     res.json({ message: 'Itinerary item deleted' });
   } catch (error) {

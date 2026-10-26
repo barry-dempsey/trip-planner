@@ -1,12 +1,17 @@
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
 const initFirebase = () => {
   try {
-    admin.initializeApp({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    });
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    // A real credential is required for FCM (messaging); fall back to the plain options otherwise
+    initializeApp(
+      projectId && privateKey && clientEmail
+        ? { credential: cert({ projectId, privateKey, clientEmail }), projectId }
+        : { projectId }
+    );
     console.log('Firebase initialized');
   } catch (error) {
     console.error('Firebase initialization error:', error);
@@ -16,7 +21,7 @@ const initFirebase = () => {
 
 const verifyToken = async (token) => {
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    const decodedToken = await getAuth().verifyIdToken(token);
     return decodedToken;
   } catch (error) {
     console.error('Token verification error:', error);

@@ -1,49 +1,284 @@
+/* ---------- Design tokens ---------- */
+:root {
+  --bg: #f4f5fb;
+  --surface: #ffffff;
+  --surface-2: #f6f7fc;
+  --text: #1c2033;
+  --muted: #6b7185;
+  --border: #e4e6f1;
+  --primary: #5b5bd6;
+  --primary-hover: #4a4abf;
+  --primary-soft: #eceafd;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --success: #16a34a;
+  --success-soft: #e7f7ed;
+  --danger: #dc2626;
+  --danger-soft: #fdecec;
+  --warning: #b45309;
+  --warning-soft: #fff4dc;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(28, 32, 51, 0.04), 0 6px 20px rgba(28, 32, 51, 0.06);
+  --shadow-hover: 0 2px 4px rgba(28, 32, 51, 0.06), 0 10px 28px rgba(28, 32, 51, 0.1);
+  --tap: 44px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f111a;
+    --surface: #181b27;
+    --surface-2: #1f2332;
+    --text: #eceef7;
+    --muted: #9aa1b8;
+    --border: #2b3045;
+    --primary: #8183f4;
+    --primary-hover: #9a9cf7;
+    --primary-soft: #26294a;
+    --on-primary: #0f111a;
+    --success: #4ade80;
+    --success-soft: #16301f;
+    --danger: #f87171;
+    --danger-soft: #3a1c1f;
+    --warning: #fbbf24;
+    --warning-soft: #3a2d12;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ---------- Base ---------- */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--primary);
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* ---------- Buttons ---------- */
 button {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 10px 15px;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s, opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn-secondary,
+.back-button {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled),
+.back-button:hover:not(:disabled) {
+  background: var(--primary-soft);
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn-link {
+  background: none;
+  color: var(--primary);
+  padding: 0;
+  min-height: 0;
   border: none;
-  border-radius: 4px;
-  background-color: #007bff;
-  color: white;
-  font-size: 14px;
-  transition: background-color 0.2s;
+  text-decoration: underline;
 }
 
-button:hover {
-  background-color: #0056b3;
+.btn-link:hover:not(:disabled) {
+  background: none;
+  color: var(--primary-hover);
 }
 
+/* ---------- Form controls ---------- */
 input,
+textarea,
+select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+  padding: 11px 13px;
+  min-height: var(--tap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  width: auto;
+  min-height: 0;
+  accent-color: var(--primary);
+}
+
 textarea {
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  resize: vertical;
+  min-height: 90px;
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------- Shared bits ---------- */
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.text-error {
+  color: var(--danger);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.error-message {
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 16px;
+  font-size: 14px;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badge-muted {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

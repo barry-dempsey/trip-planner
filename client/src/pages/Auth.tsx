@@ -27,7 +27,9 @@ export default function Auth() {
     }
 
     if (success) {
-      navigate('/trips')
+      const pending = sessionStorage.getItem('pendingInvite')
+      sessionStorage.removeItem('pendingInvite')
+      navigate(pending || '/trips')
     }
     setLoading(false)
   }

@@ -23,10 +23,17 @@ export default function AcceptInvite() {
         return
       }
 
-      console.log('Accepting invite with token:', token)
+      const authToken = localStorage.getItem('authToken')
+      if (!authToken) {
+        sessionStorage.setItem('pendingInvite', `/accept-invite/${token}`)
+        navigate('/')
+        return
+      }
 
       const response = await axios.post(
-        `${apiUrl}/api/groups/invitations/${token}/accept`
+        `${apiUrl}/api/groups/invitations/${token}/accept`,
+        {},
+        { headers: { Authorization: `Bearer ${authToken}` } }
       )
 
       console.log('Accept response:', response.data)
@@ -42,57 +49,29 @@ export default function AcceptInvite() {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        background: '#f5f5f5',
-      }}
-    >
-      <div
-        style={{
-          background: 'white',
-          padding: '40px',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          textAlign: 'center',
-          maxWidth: '400px',
-        }}
-      >
+    <div className="invite-page">
+      <div className="invite-card">
         {loading && !error ? (
           <>
-            <h2 style={{ margin: '0 0 20px 0' }}>Accepting Invitation...</h2>
-            <div style={{ fontSize: '40px', margin: '20px 0' }}>⏳</div>
-            <p style={{ color: '#666', margin: 0 }}>Please wait while we add you to the trip</p>
+            <h2>Accepting Invitation...</h2>
+            <div className="emoji">⏳</div>
+            <p>Please wait while we add you to the trip</p>
           </>
         ) : error ? (
           <>
-            <h2 style={{ margin: '0 0 20px 0', color: '#c33' }}>❌ Oops!</h2>
-            <p style={{ color: '#666', margin: '0 0 20px 0' }}>{error}</p>
-            <button
-              onClick={() => navigate('/trips')}
-              style={{
-                background: '#667eea',
-                color: 'white',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-              }}
-            >
+            <h2 className="text-error">❌ Oops!</h2>
+            <p>{error}</p>
+            <button onClick={() => navigate('/trips')}>
               Back to Trips
             </button>
           </>
         ) : (
           <>
-            <h2 style={{ margin: '0 0 20px 0', color: '#4caf50' }}>✅ Success!</h2>
-            <p style={{ color: '#666', margin: '0 0 20px 0' }}>
+            <h2 style={{ color: 'var(--success)' }}>✅ Success!</h2>
+            <p>
               You've been added to <strong>{tripName}</strong>
             </p>
-            <p style={{ color: '#999', fontSize: '12px', margin: 0 }}>
+            <p className="small">
               Redirecting to your trips...
             </p>
           </>
