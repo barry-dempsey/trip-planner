@@ -29,6 +29,7 @@ interface Trip {
   itinerary: ItineraryItem[]
   members: Array<{ userId?: string; email?: string; role: string; status?: string }>
   travelSuggestions?: any
+  accommodation?: { name?: string; address?: string }
 }
 
 interface Comment {
@@ -63,6 +64,10 @@ export default function TripDetail() {
   const [inviting, setInviting] = useState(false)
   const [generatingItinerary, setGeneratingItinerary] = useState(false)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
+  const [editingStay, setEditingStay] = useState(false)
+  const [stayName, setStayName] = useState('')
+  const [stayAddress, setStayAddress] = useState('')
+  const [savingStay, setSavingStay] = useState(false)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001'
   const token = localStorage.getItem('authToken')
@@ -212,6 +217,24 @@ export default function TripDetail() {
       alert(`Error: ${err.response?.data?.error || 'Failed to generate itinerary'}`)
     } finally {
       setGeneratingItinerary(false)
+    }
+  }
+
+  const handleSaveStay = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingStay(true)
+    try {
+      await axios.put(
+        `${apiUrl}/api/trips/${groupId}/accommodation`,
+        { name: stayName, address: stayAddress },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setEditingStay(false)
+      fetchTrip()
+    } catch (err: any) {
+      alert(`Error: ${err.response?.data?.error || 'Failed to save accommodation'}`)
+    } finally {
+      setSavingStay(false)
     }
   }
 
@@ -384,6 +407,53 @@ export default function TripDetail() {
           <p>
             <strong>Members:</strong> {trip.members.length}
           </p>
+        </div>
+
+        <div className="stay-box">
+          {editingStay ? (
+            <form className="stay-form" onSubmit={handleSaveStay}>
+              <input
+                value={stayName}
+                onChange={(e) => setStayName(e.target.value)}
+                placeholder="Where are you staying? e.g. Premier Inn London Southwark"
+                maxLength={200}
+              />
+              <input
+                value={stayAddress}
+                onChange={(e) => setStayAddress(e.target.value)}
+                placeholder="Address or area, e.g. 34 Park St, London SE1 9EF"
+                maxLength={300}
+              />
+              <div className="row-actions">
+                <button type="submit" className="btn-sm" disabled={savingStay || !(stayName.trim() || stayAddress.trim())}>
+                  {savingStay ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => setEditingStay(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="stay-summary">
+              <span>
+                <strong>🏨 Staying at:</strong>{' '}
+                {trip.accommodation?.name || trip.accommodation?.address
+                  ? [trip.accommodation?.name, trip.accommodation?.address].filter(Boolean).join(', ')
+                  : <span className="muted">Not set - add it so AI suggestions are close to you</span>}
+              </span>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => {
+                  setStayName(trip.accommodation?.name || '')
+                  setStayAddress(trip.accommodation?.address || '')
+                  setEditingStay(true)
+                }}
+              >
+                {trip.accommodation?.name || trip.accommodation?.address ? 'Edit' : 'Add'}
+              </button>
+            </div>
+          )}
         </div>
 
         {trip.travelSuggestions?.raw_suggestions && (

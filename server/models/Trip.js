@@ -20,6 +20,10 @@ const tripSchema = new mongoose.Schema({
     lng: Number,
     address: String,
   },
+  accommodation: {
+    name: String,
+    address: String,
+  },
   startDate: Date,
   endDate: Date,
   members: [

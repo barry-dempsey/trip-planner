@@ -11,6 +11,7 @@ async function generateText(prompt, { json = false } = {}) {
   const response = await client.chat.completions.create({
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     messages: [{ role: 'user', content: prompt }],
+    temperature: 0.4, // lower = fewer invented places
     ...(json && { response_format: { type: 'json_object' } }),
   });
   return response.choices[0].message.content;

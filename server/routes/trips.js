@@ -127,6 +127,29 @@ router.delete('/:groupId', async (req, res) => {
   }
 });
 
+// Set where the group is staying (used to make AI suggestions local and concrete)
+router.put('/:groupId/accommodation', async (req, res) => {
+  try {
+    const trip = await Trip.findOne({ groupId: req.params.groupId });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (!trip.members.some((m) => m.userId === req.user.uid && m.status === 'active')) {
+      return res.status(403).json({ error: 'Not a member of this trip' });
+    }
+
+    const name = String(req.body?.name || '').trim().slice(0, 200);
+    const address = String(req.body?.address || '').trim().slice(0, 300);
+    trip.accommodation = { name, address };
+    trip.travelSuggestions = null; // regenerated for the new area on next load
+    trip.updatedAt = new Date();
+    await trip.save();
+
+    if (io) io.to(`trip:${trip.groupId}`).emit('trip:accommodationUpdated', { accommodation: trip.accommodation });
+    res.json(trip.accommodation);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Generate itinerary items with AI and add them to the trip
 router.post('/:groupId/itinerary/generate', async (req, res) => {
   try {
