@@ -32,6 +32,20 @@ interface Trip {
   accommodation?: { name?: string; address?: string }
 }
 
+function transportIcon(transport: string): string {
+  const t = transport.toLowerCase()
+  if (/\b(walk|on foot|stroll)/.test(t)) return '🚶'
+  if (/\b(bus|coach)\b/.test(t)) return '🚌'
+  if (/\b(train|rail|tram|luas|dart)\b/.test(t)) return '🚆'
+  if (/\b(metro|tube|underground|subway|line)\b/.test(t)) return '🚇'
+  if (/\b(flight|fly|plane|airport)\b/.test(t)) return '✈️'
+  if (/\b(ferry|boat|ship)\b/.test(t)) return '⛴️'
+  if (/\b(bike|bicycle|cycle)\b/.test(t)) return '🚲'
+  if (/\b(taxi|uber|cab)\b/.test(t)) return '🚕'
+  if (/\b(car|drive|driving)\b/.test(t)) return '🚗'
+  return '🧭'
+}
+
 interface Comment {
   _id: string
   question: string
@@ -160,8 +174,15 @@ export default function TripDetail() {
         headers: { Authorization: `Bearer ${token}` },
       })
       setTrip(response.data)
-    } catch (err) {
-      setError('Failed to load trip')
+    } catch (err: any) {
+      const status = err.response?.status
+      setError(
+        status === 403
+          ? "You're not a member of this trip. Ask the organizer for an invite."
+          : status === 404
+            ? 'Trip not found'
+            : 'Failed to load trip'
+      )
       console.error(err)
     } finally {
       setLoading(false)
@@ -459,6 +480,7 @@ export default function TripDetail() {
         {trip.travelSuggestions?.raw_suggestions && (
           <div className="travel-suggestions">
             <h3>✈️ AI Travel Suggestions</h3>
+            <p className="hint">AI-generated, no sources. Prices, hours and availability may be wrong - verify before booking.</p>
             {trip.travelSuggestions.raw_suggestions && (
               <div className="suggestion-content">
                 {trip.travelSuggestions.raw_suggestions
@@ -545,6 +567,8 @@ export default function TripDetail() {
           </div>
         </div>
 
+        <p className="hint">AI-generated stops may contain errors (hours, days open, prices). Check each before relying on it.</p>
+
         {showItineraryForm && (
           <form className="itinerary-form" onSubmit={handleAddItinerary}>
             <div className="form-group">
@@ -607,7 +631,7 @@ export default function TripDetail() {
                     )}
                     <h3>{item.stop}</h3>
                   <p className="time">{new Date(item.time).toLocaleString()}</p>
-                  {item.transport && <p className="transport">🚗 {item.transport}</p>}
+                  {item.transport && <p className="transport">{transportIcon(item.transport)} {item.transport}</p>}
                   {item.notes && <p className="notes">{item.notes}</p>}
                 </div>
                 <div className="item-actions">

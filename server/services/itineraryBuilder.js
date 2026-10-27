@@ -1,5 +1,5 @@
 const { generateText } = require('./ai');
-const { locationContext, CONCRETE_RULES } = require('./tripContext');
+const { locationContext, tripCalendar, CONCRETE_RULES } = require('./tripContext');
 
 const MAX_ITEMS = 15;
 
@@ -13,6 +13,7 @@ async function generateItinerary(trip, preferences) {
 Trip: ${trip.name}
 Origin: ${trip.origin?.address || 'Unknown'}
 ${locationContext(trip)}
+${tripCalendar(trip)}
 Start: ${start.toISOString()}
 End: ${end ? end.toISOString() : 'not set (assume a short trip of 2-3 days)'}
 Already planned stops (do not duplicate): ${existing.join('; ') || 'none'}

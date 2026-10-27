@@ -32,6 +32,7 @@ export default function Polls({ groupId, apiUrl, token, currentUid, isOrganizer,
   const [options, setOptions] = useState(['', ''])
   const [allowMultiple, setAllowMultiple] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const base = `${apiUrl}/api/polls/trip/${groupId}`
   const headers = { Authorization: `Bearer ${token}` }
@@ -39,8 +40,14 @@ export default function Polls({ groupId, apiUrl, token, currentUid, isOrganizer,
   useEffect(() => {
     axios
       .get<Poll[]>(base, { headers })
-      .then((res) => setPolls(res.data))
-      .catch(() => setError('Failed to load polls'))
+      .then((res) => {
+        setPolls(res.data)
+        setLoadFailed(false)
+      })
+      .catch((err) => {
+        setLoadFailed(true)
+        setError(err.response?.data?.error || 'Failed to load polls')
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId])
 
@@ -154,7 +161,7 @@ export default function Polls({ groupId, apiUrl, token, currentUid, isOrganizer,
 
       <div className="comments-list">
         {polls.length === 0 ? (
-          <p className="empty">No polls yet. Create one to let the group decide!</p>
+          loadFailed ? null : <p className="empty">No polls yet. Create one to let the group decide!</p>
         ) : (
           polls.map((poll) => {
             const total = poll.options.reduce((sum, o) => sum + o.votes.length, 0)

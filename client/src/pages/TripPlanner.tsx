@@ -49,12 +49,17 @@ export default function TripPlanner() {
 
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault()
+    const start = new Date(formData.startDate)
+    if (!formData.startDate || isNaN(start.getTime())) {
+      setError('Please enter a valid start date')
+      return
+    }
     try {
       const tripData = {
         name: formData.name,
         destination: { address: formData.destination },
         origin: { address: formData.origin },
-        startDate: new Date(formData.startDate).toISOString(),
+        startDate: start.toISOString(),
       }
       const response = await axios.post(`${apiUrl}/api/trips`, tripData, {
         headers: { Authorization: `Bearer ${token}` },

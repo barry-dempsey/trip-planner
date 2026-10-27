@@ -1,25 +1,28 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import io, { Socket } from 'socket.io-client'
 
-export function useSocket(): Socket | null {
+export function useSocket(token: string | null): Socket | null {
   const [socket, setSocket] = useState<Socket | null>(null)
-  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
+    if (!token) {
+      setSocket(null)
+      return
+    }
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:4001', {
+      auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 5,
     })
 
-    socketRef.current = newSocket
     setSocket(newSocket)
 
     return () => {
       newSocket.disconnect()
     }
-  }, [])
+  }, [token])
 
   return socket
 }

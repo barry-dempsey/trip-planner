@@ -43,6 +43,7 @@ export default function Expenses({ groupId, apiUrl, token, currentUid, members, 
   const [amount, setAmount] = useState('')
   const [paidBy, setPaidBy] = useState(currentUid || '')
   const [error, setError] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const base = `${apiUrl}/api/expenses/trip/${groupId}`
   const headers = { Authorization: `Bearer ${token}` }
@@ -54,8 +55,10 @@ export default function Expenses({ groupId, apiUrl, token, currentUid, members, 
     try {
       const res = await axios.get<Summary>(base, { headers })
       setData(res.data)
-    } catch {
-      setError('Failed to load expenses')
+      setLoadFailed(false)
+    } catch (err: any) {
+      setLoadFailed(true)
+      setError(err.response?.data?.error || 'Failed to load expenses')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, token])
@@ -145,7 +148,7 @@ export default function Expenses({ groupId, apiUrl, token, currentUid, members, 
 
       <div className="comments-list">
         {data.expenses.length === 0 ? (
-          <p className="empty">No expenses yet.</p>
+          loadFailed ? null : <p className="empty">No expenses yet.</p>
         ) : (
           data.expenses.map((exp) => (
             <div key={exp._id} className="comment-item">

@@ -17,14 +17,24 @@ function AppHeader() {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const [isConnected, setIsConnected] = useState(false)
-  const socket = useSocket()
   const token = localStorage.getItem('authToken')
+  const socket = useSocket(token)
 
   useEffect(() => {
-    if (socket) {
-      setIsConnected(socket.connected)
-      socket.on('connect', () => setIsConnected(true))
-      socket.on('disconnect', () => setIsConnected(false))
+    if (!socket) {
+      setIsConnected(false)
+      return
+    }
+    const onConnect = () => setIsConnected(true)
+    const onDisconnect = () => setIsConnected(false)
+    setIsConnected(socket.connected)
+    socket.on('connect', onConnect)
+    socket.on('disconnect', onDisconnect)
+    socket.on('connect_error', onDisconnect)
+    return () => {
+      socket.off('connect', onConnect)
+      socket.off('disconnect', onDisconnect)
+      socket.off('connect_error', onDisconnect)
     }
   }, [socket])
 

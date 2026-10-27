@@ -26,6 +26,19 @@ const CONCRETE_RULES = `Rules for being concrete:
 - Stay close to where the group is staying. Give the neighbourhood, approximate walking time or the exact transit line/stop from the accommodation, and group nearby places into the same day.
 - Include practical details where known: typical opening hours, ticket price range, whether booking ahead is needed, and a best-time-to-go tip.
 - For meals, name a specific restaurant or market plus a signature dish to order.
-- Schedule each stop inside its opening hours, and do not list the accommodation itself as a stop.`;
+- Schedule each stop inside its opening hours AND on a weekday it is open. Check the weekday of the date you assign: weekly or weekend-only events (e.g. a Saturday market) must only be placed on that weekday, and if no trip day matches, leave the item out.
+- Do not list the accommodation itself as a stop.`;
 
-module.exports = { describeStay, locationContext, CONCRETE_RULES };
+// Lists each trip day with its weekday so the AI can respect "open Saturdays only" style hours
+function tripCalendar(trip) {
+  const start = new Date(trip.startDate);
+  if (isNaN(start)) return '';
+  const end = trip.endDate ? new Date(trip.endDate) : new Date(start.getTime() + 2 * 86400000);
+  const days = [];
+  for (let d = new Date(start); d <= end && days.length < 14; d = new Date(d.getTime() + 86400000)) {
+    days.push(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }));
+  }
+  return `Trip days (use these exact weekdays):\n${days.join('\n')}`;
+}
+
+module.exports = { describeStay, locationContext, tripCalendar, CONCRETE_RULES };

@@ -15,6 +15,16 @@ router.setIO = (socketIO) => {
   io = socketIO;
 };
 
+// Respond 403 and return true when the caller is not an active member (or organizer if requested)
+function denyUnlessMember(trip, req, res, { organizerOnly = false } = {}) {
+  const me = trip.members.find((m) => m.userId === req.user.uid && m.status === 'active');
+  if (!me || (organizerOnly && me.role !== 'organizer')) {
+    res.status(403).json({ error: organizerOnly ? 'Only the organizer can do this' : 'You are not a member of this trip' });
+    return true;
+  }
+  return false;
+}
+
 // Create a new trip
 router.post('/', async (req, res) => {
   try {
@@ -50,7 +60,9 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.uid;
-    const trips = await Trip.find({ 'members.userId': userId });
+    const trips = await Trip.find({
+      members: { $elemMatch: { userId, status: { $nin: ['pending', 'removed'] } } },
+    });
     res.json(trips);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -88,6 +100,7 @@ router.get('/:groupId', async (req, res) => {
   try {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(trip, req, res)) return;
     ensureSuggestions(trip);
     res.json(trip);
   } catch (error) {
@@ -99,6 +112,9 @@ router.get('/:groupId', async (req, res) => {
 router.put('/:groupId', async (req, res) => {
   try {
     const { name, destination, origin, startDate, endDate } = req.body;
+    const existing = await Trip.findOne({ groupId: req.params.groupId });
+    if (!existing) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(existing, req, res, { organizerOnly: true })) return;
     const trip = await Trip.findOneAndUpdate(
       { groupId: req.params.groupId },
       {
@@ -120,6 +136,9 @@ router.put('/:groupId', async (req, res) => {
 // Delete a trip
 router.delete('/:groupId', async (req, res) => {
   try {
+    const trip = await Trip.findOne({ groupId: req.params.groupId });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(trip, req, res, { organizerOnly: true })) return;
     await Trip.deleteOne({ groupId: req.params.groupId });
     res.json({ message: 'Trip deleted' });
   } catch (error) {
@@ -156,9 +175,7 @@ router.post('/:groupId/itinerary/generate', async (req, res) => {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
 
-    if (!trip.members.some((m) => m.userId === req.user.uid)) {
-      return res.status(403).json({ error: 'Not a member of this trip' });
-    }
+    if (denyUnlessMember(trip, req, res)) return;
     if (!trip.destination?.address) {
       return res.status(400).json({ error: 'Trip needs a destination first' });
     }
@@ -198,6 +215,7 @@ router.post('/:groupId/itinerary', async (req, res) => {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
 
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(trip, req, res)) return;
 
     const user = await User.findOne({ uid: req.user.uid });
 
@@ -255,6 +273,7 @@ router.put('/:groupId/itinerary/:itemId', async (req, res) => {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
 
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(trip, req, res)) return;
 
     const itineraryItem = trip.itinerary.id(req.params.itemId);
     if (!itineraryItem) {
@@ -333,6 +352,7 @@ router.delete('/:groupId/itinerary/:itemId', async (req, res) => {
     const trip = await Trip.findOne({ groupId: req.params.groupId });
 
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (denyUnlessMember(trip, req, res)) return;
 
     const deletedItem = trip.itinerary.id(req.params.itemId);
     if (!deletedItem) {
